@@ -42,7 +42,7 @@ int last_code_log = 255;
 byte current_code_log = 255;
 
 // Network
-byte mac[] = { 0x90, 0xA2, 0xDA, 0x00, 0x30, 0x7D };
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xE1 };
 EthernetClient client;
 
 // Structures to hold the weather (there can be multiple condition lines, but only one temp)
@@ -163,10 +163,14 @@ void setup() {
 #endif  
 
   // Start the watchdog
-  WDT_Init();
+  // WDT_Init();
   
   // Start the Ethernet
   start_Ethernet();
+  
+#if defined(DEBUG)
+  Serial.print("Ethernet configured");
+#endif
   
   // Configure the LEDs and turn them off
   pinMode(LED_RED, OUTPUT);
@@ -249,6 +253,8 @@ void loop() {
       else if (listStarted && !conditionStarted && (c == '[')) {
         conditionStarted = true;
         conditionCount++;
+        haveKey = false;   // Ignore "weather" key
+        keyStarted = false;
         if (conditionCount > MAX_CONDITIONS) break;  // Got all our conditions, get out
       }
       else if (listStarted && !keyStarted && (c == '"')) {
@@ -283,6 +289,10 @@ void loop() {
           i = 0;
         }
       } 
+      else if (haveKey && !valueStarted && ((c == "{") || (c == "["))) {   // Starting a new level, reset
+        haveKey = false;
+        keyStarted = false;
+      }
       else if (valueStarted) {
         if ((stringStarted && (c == '"')) || (numStarted && ((c == ',') || (c == '}')))) {
           value[i] = 0x00;
@@ -295,8 +305,20 @@ void loop() {
 #if defined(DEBUG)
           Serial.println("valueDone");
 #endif
-          if (bComp(key,"temp")) temp = atof(value);
-          else if (bComp(key,"id") && conditionStarted) conditions[conditionCount-1] = atoi(value);
+          if (bComp(key,"temp")) {
+            temp = atof(value);
+#if defined(DEBUG)
+            Serial.print("Temperature: ");
+            Serial.print(temp);
+#endif
+          }
+          else if (bComp(key,"id") && conditionStarted) {
+            conditions[conditionCount-1] = atoi(value);
+#if defined(DEBUG)
+            Serial.print("Id: ");
+            Serial.print(conditions[conditionCount-1]);
+#endif
+          }
         }
         else value[i++] = c;
       } 
