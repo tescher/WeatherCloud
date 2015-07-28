@@ -3,12 +3,11 @@
 #include <Ethernet.h>
 #include <stdlib.h>
 #include <avr/wdt.h>
-#include <EEPROM.h>   ;*TWE++ 4/8/12 Read config from EEPROM rather than hard coded
 
 // LED Driver Pins
 #define LED_RED 9
 #define LED_GREEN 10
-#define LED_BLUE 11
+#define LED_BLUE 6
 
 // Color definitions, using 0x0RGB
 #define RED 0x0F00
@@ -22,7 +21,7 @@
 #define LIGHTGREEN 0x08F8
 
 // Timing intervals
-#define FADE_INTERVAL_MS 2000  //milliseconds (NOT USED CURRENTLY)
+#define FADE_INTERVAL_MS 10  //milliseconds 
 #define COLOR_INTERVAL_SEC 5 //seconds
 #define QUERY_INTERVAL_SEC 600 //seconds
 
@@ -36,10 +35,7 @@ char server[24] = "api.openweathermap.org";   // Up to 24 characters for the ser
 
 // Watchdog and debugging config
 #define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
-#define CODE_LOG_LOC 200   //Location in the EEPROM where to store the current execution point
 #define DEBUG         // Conditional Compilation
-int last_code_log = 255;
-byte current_code_log = 255;
 
 // Network
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xE1 };
@@ -48,6 +44,9 @@ EthernetClient client;
 // Structures to hold the weather (there can be multiple condition lines, but only one temp)
 int conditions[MAX_CONDITIONS];
 float temp;
+
+// Store the previous color to allow fade to work
+unsigned int prev_color;
 
 // Utility functions
 
@@ -60,140 +59,108 @@ bool bComp(char* a1, char* a2) {
   }
 }
 
-// Delay function with watchdog resets
-
-void delay_with_wd(int ms) {
-  int loop_count = ms / WD_INTERVAL;
-  int leftover = ms % WD_INTERVAL;
-
-  for (int i=0; i < loop_count; i++) {
-    delay(WD_INTERVAL);
-    wdt_reset();
-  }
-  delay(leftover);
-  wdt_reset();
-}
-
-// Initialize watchdog
-
-void WDT_Init(void) {
-  //disable interrupts
-  cli();
-  //reset watchdog
-  wdt_reset();
-  //set up WDT interrupt
-  WDTCSR = (1<<WDCE)|(1<<WDE);
-  //Start watchdog timer with 8s timeout, interrupt and system reset modes
-  WDTCSR = (1<<WDIE)|(1<<WDE)|(1<<WDP3)|(1<<WDP0);
-  //Enable global interrupts
-  sei();
-}
-
-// WD Interrupt Vector - save log to EEPROM
-
-ISR(WDT_vect) {
-  EEPROM.write(CODE_LOG_LOC, current_code_log);
-  while(1);
-}
- 
-// Store a marker where we are so when we restart we can log where we hung up
-
-void code_log(byte location) {
-  current_code_log = location;
-  // EEPROM.write(CODE_LOG_LOC, location);
-}
-
-int get_code_log() {
-  return (EEPROM.read(CODE_LOG_LOC) & 0x00FF);
-}
-
 // Set up Ethernet connection
 
 boolean start_Ethernet() {
   // start the Ethernet connection, try up to 5 times, otherwise lock up and let WD reset
-#if defined(DEBUG)
+  #if defined(DEBUG)
   Serial.println("Attempting to configure Ethernet...");
-#endif
-  code_log(1);
+  #endif
   int eth_retry = 0;
-  while ((Ethernet.begin(mac) == 0) && (eth_retry < 6)) {
-#if defined(DEBUG)
+  while ((Ethernet.begin(mac) == 0)) {
+    #if defined(DEBUG)
     Serial.println("Failed to configure Ethernet using DHCP");
     Serial.println("retrying...");
-#endif
-    delay_with_wd(5000);
+    #endif
+    delay(5000);
     eth_retry++;
   }
-  if (eth_retry > 5) {
-    code_log(24);
-    for (;;)
-      ;
-   }
-  
   // give the Ethernet shield a second to initialize:
-  delay_with_wd(1000);
+  delay(1000);
 }
 
 // Set LED intensities. "color" is 4 bits each for RGB. Duplicate to get a full byte
-void LED_Display(unsigned int color) {
-  int red = color >> 8 & 0xF;
-  red |= red << 4;
-  int green = color >> 4 & 0xF;
-  green |= green << 4;
-  int blue = color & 0xF;
-  blue |= blue << 4;
-  
+void LED_Display(unsigned int color, unsigned int fade_color, boolean fade) {
+  unsigned int red = (color >> 8) & 0xF;
+  red |= (red << 4);
+  unsigned int green = (color >> 4) & 0xF;
+  green |= (green << 4);
+  unsigned int blue = color & 0xF;
+  blue |= (blue << 4);
+  #if defined(DEBUG)
+  Serial.print("Red: ");
+  Serial.println(red,HEX);
+  Serial.print("Green: ");
+  Serial.println(green,HEX);
+  Serial.print("Blue: ");
+  Serial.println(blue,HEX);
+  #endif
+  if (fade) {
+    unsigned int fade_red = (fade_color >> 8) & 0xF;
+    fade_red |= (fade_red << 4);
+    unsigned int fade_green = (fade_color >> 4) & 0xF;
+    fade_green |= (fade_green << 4);
+    unsigned int fade_blue = fade_color & 0xF;
+    fade_blue |= (fade_blue << 4);
+ 
+    int red_inc = 0;
+    if (fade_red > red) red_inc = -1;
+    else if (fade_red < red) red_inc = 1;
+    int green_inc = 0;
+    if (fade_green > green) green_inc = -1;
+    else if (fade_green < green) green_inc = 1;
+    int blue_inc = 0;
+    if (fade_blue > blue) blue_inc = -1;
+    else if (fade_blue < blue) blue_inc = 1;
+    
+    for (int i=0; i<255; i++) {
+      if (fade_red != red) fade_red += red_inc;
+      if (fade_green != green) fade_green += green_inc;
+      if (fade_blue != blue) fade_blue += blue_inc;\
+      analogWrite(LED_RED,fade_red);
+      analogWrite(LED_GREEN, fade_green);
+      analogWrite(LED_BLUE, fade_blue);
+      delay(FADE_INTERVAL_MS);
+    }
+  }
   analogWrite(LED_RED,red);
   analogWrite(LED_GREEN, green);
   analogWrite(LED_BLUE, blue);
 }
-  
-  
-
- 
-  
 
 void setup() {
-  // Find out where we crashed
-  last_code_log = get_code_log();
 
   // start the serial library:
-#if defined(DEBUG)
+  #if defined(DEBUG)
   Serial.begin(9600);
-#endif  
-
-  // Start the watchdog
-  // WDT_Init();
+  #endif  
   
+  randomSeed(analogRead(0));
+
   // Start the Ethernet
   start_Ethernet();
   
-#if defined(DEBUG)
+  #if defined(DEBUG)
   Serial.print("Ethernet configured");
-#endif
+  #endif
   
   // Configure the LEDs and turn them off
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
-  LED_Display(BLACK);
+  LED_Display(BLACK,BLACK,false);
 
 }
 
 void loop() {
 
 
-#if defined(DEBUG)
   // Query the weather
+  #if defined(DEBUG)
   Serial.println("connecting...");
-#endif
-
-  int i = 0;
+  #endif
 
   if (client.connect(server, 80)) {
-    code_log(2);
-    // Serial.println("connected");
-
     client.print("GET ");
     client.print("/data/2.5/forecast/?id=");
     client.print(city_code);
@@ -201,47 +168,45 @@ void loop() {
     client.print("Host: ");
     client.println(server);
     client.println();
-#if defined(DEBUG)
+    #if defined(DEBUG)
     Serial.print("GET ");
     Serial.print("/data/2.5/forecast/?id=");
     Serial.print(city_code);
     Serial.println(" HTTP/1.0");
     Serial.print("Host: ");
     Serial.println(server);
-#endif
+    #endif
   } 
   else {
-    code_log(3);
-#if defined(DEBUG)
+    #if defined(DEBUG)
     // if you didn't get a connection to the server:
     Serial.println("connection failed");
-#endif
-    for(;;)
-      ;
+    #endif
   }
   
   // This is NOT a generic json parser, it is very specific to the openweather response format
 
+  int listCount = 0;
+  int conditionCount = 0;
+  temp = 0;
+
   bool jsonStarted = false;
   bool listStarted = false;
-  int listCount = 0;
   bool conditionStarted = false;
-  int conditionCount = 0;
   bool keyStarted = false;
   bool haveKey = false;
   bool valueStarted = false;
   bool stringStarted = false;
   bool numStarted = false;
+  int i = 0;
   char key[20];
   char value[20];
   while (client.connected()) {
-    code_log(4);
     if (client.available()) {
-      code_log(5);
       char c = client.read();
-#if defined(DEBUG)
+      #if defined(DEBUG)
       Serial.print(c);
-#endif
+      #endif
       if (!jsonStarted && (c == '{')) {
         jsonStarted = true;
       } 
@@ -260,9 +225,9 @@ void loop() {
       else if (listStarted && !keyStarted && (c == '"')) {
         keyStarted = true;
         i = 0;
-#if defined(DEBUG)
+        #if defined(DEBUG)
         Serial.println("keyStart");
-#endif
+        #endif
       } 
       else if (keyStarted && !haveKey && (c != '"')) {
         key[i++] = c;
@@ -270,15 +235,19 @@ void loop() {
       else if (keyStarted && !haveKey && (c == '"')) {
         haveKey = true;
         key[i] = 0x00;
-#if defined(DEBUG)
+        #if defined(DEBUG)
         Serial.println("haveKey");
-#endif
+        #endif
       } 
+      else if (haveKey && !valueStarted && ((c == '{') || (c == '['))) {   // Starting a new level, reset
+        haveKey = false;
+        keyStarted = false;
+      }
       else if (haveKey && !valueStarted && (c != ' ') && (c != ':')) {
         valueStarted = true;
-#if defined(DEBUG)
+        #if defined(DEBUG)
         Serial.println("valueStart");
-#endif
+        #endif
         if (c != '"') {
           numStarted = true;
           i = 0;
@@ -289,10 +258,6 @@ void loop() {
           i = 0;
         }
       } 
-      else if (haveKey && !valueStarted && ((c == "{") || (c == "["))) {   // Starting a new level, reset
-        haveKey = false;
-        keyStarted = false;
-      }
       else if (valueStarted) {
         if ((stringStarted && (c == '"')) || (numStarted && ((c == ',') || (c == '}')))) {
           value[i] = 0x00;
@@ -302,22 +267,24 @@ void loop() {
           // if (numStarted && (c == '}')) valueStarted = false;
           numStarted = false;
           keyStarted = false;
-#if defined(DEBUG)
+          #if defined(DEBUG)
           Serial.println("valueDone");
-#endif
+          #endif
           if (bComp(key,"temp")) {
             temp = atof(value);
-#if defined(DEBUG)
+            #if defined(DEBUG)
             Serial.print("Temperature: ");
             Serial.print(temp);
-#endif
+            #endif
           }
           else if (bComp(key,"id") && conditionStarted) {
             conditions[conditionCount-1] = atoi(value);
-#if defined(DEBUG)
-            Serial.print("Id: ");
+            #if defined(DEBUG)
+            Serial.print("Id ");
+            Serial.print(conditionCount);
+            Serial.print(": ");
             Serial.print(conditions[conditionCount-1]);
-#endif
+            #endif
           }
         }
         else value[i++] = c;
@@ -330,33 +297,27 @@ void loop() {
       }
     } 
     else {
-      code_log(6);
-#if defined(DEBUG)
+      #if defined(DEBUG)
       Serial.println("No more data, waiting for server to disconnect");
-#endif
-      delay_with_wd(1000);
+      #endif
+      delay(1000);
     }
   }
 
   while (client.available()) {
-    code_log(7);
     char c = client.read();  //Just clean up anything left
-#if defined(DEBUG)
+    #if defined(DEBUG)
     Serial.print(c);
-#endif
+    #endif
   }
   
-  code_log(8);
   client.stop();
-  delay_with_wd(1000);
+  delay(1000);
   
   if (conditionCount < 1) {
-    code_log(9);
-#if defined(DEBUG)
+    #if defined(DEBUG)
     Serial.println("No conditions received");
-#endif
-        for(;;)
-      ;
+    #endif
   }
  
 
@@ -366,13 +327,22 @@ void loop() {
   if (temp > TEMP_HOT) {
     color1 = RED;
   }
+  else if (temp == 0) {
+    color1 = BLACK;
+  }
   else if (temp < TEMP_COLD) {
     color1 = BLUE;
   }
   
-  unsigned int color2 = 0;
+  unsigned int color2 = BLACK;
   boolean thunder = false;
-  for (int i = 0; i++; i < conditionCount) {
+  for (int i = 0; i < conditionCount; i++) {
+    #if defined(DEBUG)
+    Serial.print("Condition ");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.println(conditions[i]);
+    #endif
     if ((color2 == 0) && (conditions[i] > 499) && (conditions[i] < 600)) {
       color2 = GREEN; // Rain
     }
@@ -389,32 +359,45 @@ void loop() {
       color2 = LIGHTGREEN; // Drizzle
     }
     if ((conditions[i] > 199) && (conditions[i] < 300)) {
-      thunder == false; // Thunder
+      thunder = true; // Thunder
     }
   }
 
   
   
-#if defined(DEBUG)
+  #if defined(DEBUG)
   Serial.println("");
   Serial.print("Color1: ");
   Serial.println(color1);
   Serial.print("Color2: ");
-  Serial.print(color2);
+  Serial.println(color2);
   Serial.print("Thunder: ");
   Serial.println(thunder);
-#endif
+  #endif
 
-  code_log(13);
+  // Color the cloud!
+  boolean display1 = false;
   for (int i=0; i < QUERY_INTERVAL_SEC;) {
-    boolean display1 = false;
+    if (display1) {
+        LED_Display(color2, color1, true);
+        display1 = false;
+    } else {
+        LED_Display(color1, color2, true);
+        display1 = true;
+    }
     for (int j=0; j < COLOR_INTERVAL_SEC; j++,i++) {
-      if (display1) {
-        LED_Display(color2);
-      } else {
-        LED_Display(color1);
+       delay(1000);
+    }
+    if (thunder) {
+      if (random(1,100) % 10 == 0) {
+        int claps = random(1,5);
+        for (int k=0; k < claps; k++) {
+          LED_Display(WHITE,WHITE,false);
+          delay(random(1,3) * 300);
+          LED_Display(color1,color1,false);
+          delay(random(1,5) * 300);
+        }
       }
-      delay_with_wd(1000);
     }
   }
 }
