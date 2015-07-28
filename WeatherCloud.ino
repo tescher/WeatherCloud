@@ -30,7 +30,7 @@
 #define MAX_CONDITIONS 3 //Number of forecast conditions to accomodate
 #define TEMP_HOT 295 // 71 F
 #define TEMP_COLD 275 // 35 F
-char city_code[8] = "7263016";  // Adjust to match openweather city code
+char city_code[8] = "5260694";  // Adjust to match openweather city code Lodi, WI = 5260694, Sutton, AK = 7263016
 char server[24] = "api.openweathermap.org";   // Up to 24 characters for the server name. 
 
 // Watchdog and debugging config
@@ -375,6 +375,9 @@ void loop() {
   Serial.println(thunder);
   #endif
 
+  // Testing
+  // thunder = true;
+  
   // Color the cloud!
   boolean display1 = false;
   for (int i=0; i < QUERY_INTERVAL_SEC;) {
@@ -389,12 +392,13 @@ void loop() {
        delay(1000);
     }
     if (thunder) {
-      if (random(1,100) % 10 == 0) {
-        int claps = random(1,5);
+      if (random(1,100) % 3 == 0) {
+        int claps = random(1,7);
+        unsigned int base_color = (display1) ? color1 : color2;
         for (int k=0; k < claps; k++) {
           LED_Display(WHITE,WHITE,false);
-          delay(random(1,3) * 300);
-          LED_Display(color1,color1,false);
+          delay(random(1,3) * 100);
+          LED_Display(base_color, base_color,false);
           delay(random(1,5) * 300);
         }
       }
