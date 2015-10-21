@@ -32,6 +32,7 @@
 #define TEMP_COLD 275 // 35 F
 char city_code[8] = "5260694";  // Adjust to match openweather city code Lodi, WI = 5260694, Sutton, AK = 7263016
 char server[24] = "api.openweathermap.org";   // Up to 24 characters for the server name. 
+char APPID[33] = "6b60e46edbf44b3623b37785004e9731";  //OpenWeather API key
 
 // Watchdog and debugging config
 #define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
@@ -164,6 +165,8 @@ void loop() {
     client.print("GET ");
     client.print("/data/2.5/forecast/?id=");
     client.print(city_code);
+    client.print("&APPID=");
+    client.print(APPID);
     client.println(" HTTP/1.0");
     client.print("Host: ");
     client.println(server);
@@ -172,6 +175,8 @@ void loop() {
     Serial.print("GET ");
     Serial.print("/data/2.5/forecast/?id=");
     Serial.print(city_code);
+    Serial.print("&APPID=");
+    Serial.print(APPID);
     Serial.println(" HTTP/1.0");
     Serial.print("Host: ");
     Serial.println(server);
