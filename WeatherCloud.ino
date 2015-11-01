@@ -350,6 +350,7 @@ void loop() {
     for (int i=0; i< MAX_CONDITIONS; i++) {
       conditions[i] = random(199, 804);
     }
+    conditionCount = MAX_CONDITIONS;
     temp = random(200, 300);
   } else if (conditionCount > MAX_CONDITIONS) {
     conditionCount = MAX_CONDITIONS;
