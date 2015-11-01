@@ -47,6 +47,7 @@ char APPID[33] = "6b60e46edbf44b3623b37785004e9731";  //OpenWeather API key
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xE1 };
 EthernetClient client;
 boolean have_network = false;
+int network_retry = 1;
 
 // Structures to hold the weather (there can be multiple condition lines, but only one temp)
 int conditions[MAX_CONDITIONS];
@@ -73,8 +74,8 @@ boolean start_Ethernet() {
   #if defined(DEBUG)
   Serial.println("Attempting to configure Ethernet...");
   #endif
-  int eth_retry = 0;   // Going to retry twice
-  while ((Ethernet.begin(mac) == 0) && eth_retry < 2) {
+  int eth_retry = 0;   
+  while ((Ethernet.begin(mac) == 0) && eth_retry < network_retry) {
     #if defined(DEBUG)
     Serial.println("Failed to configure Ethernet using DHCP");
     Serial.println("retrying...");
@@ -83,7 +84,7 @@ boolean start_Ethernet() {
     eth_retry++;
   }
   
-  if (eth_retry >= 2) {
+  if (eth_retry >= network_retry) {
     return false;
   } else {
     // give the Ethernet shield a second to initialize:
@@ -350,7 +351,9 @@ void loop() {
       conditions[i] = random(199, 804);
     }
     temp = random(200, 300);
-  }  
+  } else if (conditionCount > MAX_CONDITIONS) {
+    conditionCount = MAX_CONDITIONS;
+  }
 
  
   // Parse the weather info and set the lights
