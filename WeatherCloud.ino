@@ -19,6 +19,8 @@
 #define BLACK 0x0000
 #define PURPLE 0x0F0F
 #define LIGHTGREEN 0x08F8
+#define LIGHTBLUE 0x088F
+#define LIGHTRED 0x0F88
 
 // Timing intervals
 #define FADE_INTERVAL_MS 10  //milliseconds 
@@ -29,18 +31,22 @@
 #define FORECAST_LINE 1 //line 1 is 3 hours out, 2 is 6 hours out, etc. 
 #define MAX_CONDITIONS 3 //Number of forecast conditions to accomodate
 #define TEMP_HOT 295 // 71 F
-#define TEMP_COLD 275 // 35 F
-char city_code[8] = "5260694";  // Adjust to match openweather city code Lodi, WI = 5260694, Sutton, AK = 7263016
+#define TEMP_WARM 283 // 50 F
+#define TEMP_COOL 273 // 32 F
+#define TEMP_COLD 261 // 10 F
+#define ALWAYS_THUNDER 0  // Whether or not to always display lightning
+char city_code[8] = "7263016";  // Adjust to match openweather city code Lodi, WI = 5260694, Sutton, AK = 7263016
 char server[24] = "api.openweathermap.org";   // Up to 24 characters for the server name. 
 char APPID[33] = "6b60e46edbf44b3623b37785004e9731";  //OpenWeather API key
 
 // Watchdog and debugging config
 #define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
-#define DEBUG         // Conditional Compilation
+#define DEBUG 1        // Conditional Compilation
 
 // Network
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xE1 };
 EthernetClient client;
+boolean have_network = false;
 
 // Structures to hold the weather (there can be multiple condition lines, but only one temp)
 int conditions[MAX_CONDITIONS];
@@ -67,8 +73,8 @@ boolean start_Ethernet() {
   #if defined(DEBUG)
   Serial.println("Attempting to configure Ethernet...");
   #endif
-  int eth_retry = 0;
-  while ((Ethernet.begin(mac) == 0)) {
+  int eth_retry = 0;   // Going to retry twice
+  while ((Ethernet.begin(mac) == 0) && eth_retry < 2) {
     #if defined(DEBUG)
     Serial.println("Failed to configure Ethernet using DHCP");
     Serial.println("retrying...");
@@ -76,8 +82,15 @@ boolean start_Ethernet() {
     delay(5000);
     eth_retry++;
   }
-  // give the Ethernet shield a second to initialize:
-  delay(1000);
+  
+  if (eth_retry >= 2) {
+    return false;
+  } else {
+    // give the Ethernet shield a second to initialize:
+    delay(1000);
+    return true;
+  }  
+  
 }
 
 // Set LED intensities. "color" is 4 bits each for RGB. Duplicate to get a full byte
@@ -131,6 +144,12 @@ void LED_Display(unsigned int color, unsigned int fade_color, boolean fade) {
 
 void setup() {
 
+  // Configure the LEDs and turn them off
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+  LED_Display(BLACK,BLACK,false);
+
   // start the serial library:
   #if defined(DEBUG)
   Serial.begin(9600);
@@ -139,202 +158,215 @@ void setup() {
   randomSeed(analogRead(0));
 
   // Start the Ethernet
-  start_Ethernet();
+  have_network = start_Ethernet();
   
   #if defined(DEBUG)
   Serial.print("Ethernet configured");
   #endif
   
-  // Configure the LEDs and turn them off
-  pinMode(LED_RED, OUTPUT);
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_BLUE, OUTPUT);
-  LED_Display(BLACK,BLACK,false);
 
 }
 
 void loop() {
 
-
-  // Query the weather
-  #if defined(DEBUG)
-  Serial.println("connecting...");
-  #endif
-
-  if (client.connect(server, 80)) {
-    client.print("GET ");
-    client.print("/data/2.5/forecast/?id=");
-    client.print(city_code);
-    client.print("&APPID=");
-    client.print(APPID);
-    client.println(" HTTP/1.0");
-    client.print("Host: ");
-    client.println(server);
-    client.println();
-    #if defined(DEBUG)
-    Serial.print("GET ");
-    Serial.print("/data/2.5/forecast/?id=");
-    Serial.print(city_code);
-    Serial.print("&APPID=");
-    Serial.print(APPID);
-    Serial.println(" HTTP/1.0");
-    Serial.print("Host: ");
-    Serial.println(server);
-    #endif
-  } 
-  else {
-    #if defined(DEBUG)
-    // if you didn't get a connection to the server:
-    Serial.println("connection failed");
-    #endif
-  }
   
-  // This is NOT a generic json parser, it is very specific to the openweather response format
-
-  int listCount = 0;
-  int conditionCount = 0;
-  temp = 0;
-
-  bool jsonStarted = false;
-  bool listStarted = false;
-  bool conditionStarted = false;
-  bool keyStarted = false;
-  bool haveKey = false;
-  bool valueStarted = false;
-  bool stringStarted = false;
-  bool numStarted = false;
-  int i = 0;
-  char key[20];
-  char value[20];
-  while (client.connected()) {
-    if (client.available()) {
-      char c = client.read();
+  // Query the weather if network connected
+  if (have_network) {
+    #if defined(DEBUG)
+    Serial.println("connecting...");
+    #endif
+  
+    if (client.connect(server, 80)) {
+      client.print("GET ");
+      client.print("/data/2.5/forecast/?id=");
+      client.print(city_code);
+      client.print("&APPID=");
+      client.print(APPID);
+      client.println(" HTTP/1.0");
+      client.print("Host: ");
+      client.println(server);
+      client.println();
       #if defined(DEBUG)
-      Serial.print(c);
+      Serial.print("GET ");
+      Serial.print("/data/2.5/forecast/?id=");
+      Serial.print(city_code);
+      Serial.print("&APPID=");
+      Serial.print(APPID);
+      Serial.println(" HTTP/1.0");
+      Serial.print("Host: ");
+      Serial.println(server);
       #endif
-      if (!jsonStarted && (c == '{')) {
-        jsonStarted = true;
-      } 
-      else if (jsonStarted && !listStarted && (c == '[')) {
-        listStarted = true;
-        listCount++;
-        if (listCount != FORECAST_LINE) listStarted = false;  // Not our line, get out
-      } 
-      else if (listStarted && !conditionStarted && (c == '[')) {
-        conditionStarted = true;
-        conditionCount++;
-        haveKey = false;   // Ignore "weather" key
-        keyStarted = false;
-        if (conditionCount > MAX_CONDITIONS) break;  // Got all our conditions, get out
-      }
-      else if (listStarted && !keyStarted && (c == '"')) {
-        keyStarted = true;
-        i = 0;
-        #if defined(DEBUG)
-        Serial.println("keyStart");
-        #endif
-      } 
-      else if (keyStarted && !haveKey && (c != '"')) {
-        key[i++] = c;
-      } 
-      else if (keyStarted && !haveKey && (c == '"')) {
-        haveKey = true;
-        key[i] = 0x00;
-        #if defined(DEBUG)
-        Serial.println("haveKey");
-        #endif
-      } 
-      else if (haveKey && !valueStarted && ((c == '{') || (c == '['))) {   // Starting a new level, reset
-        haveKey = false;
-        keyStarted = false;
-      }
-      else if (haveKey && !valueStarted && (c != ' ') && (c != ':')) {
-        valueStarted = true;
-        #if defined(DEBUG)
-        Serial.println("valueStart");
-        #endif
-        if (c != '"') {
-          numStarted = true;
-          i = 0;
-          value[i++] = c;
-        } 
-        else {
-          stringStarted = true;
-          i = 0;
-        }
-      } 
-      else if (valueStarted) {
-        if ((stringStarted && (c == '"')) || (numStarted && ((c == ',') || (c == '}')))) {
-          value[i] = 0x00;
-          valueStarted = false;
-          haveKey = false;
-          stringStarted = false;
-          // if (numStarted && (c == '}')) valueStarted = false;
-          numStarted = false;
-          keyStarted = false;
-          #if defined(DEBUG)
-          Serial.println("valueDone");
-          #endif
-          if (bComp(key,"temp")) {
-            temp = atof(value);
-            #if defined(DEBUG)
-            Serial.print("Temperature: ");
-            Serial.print(temp);
-            #endif
-          }
-          else if (bComp(key,"id") && conditionStarted) {
-            conditions[conditionCount-1] = atoi(value);
-            #if defined(DEBUG)
-            Serial.print("Id ");
-            Serial.print(conditionCount);
-            Serial.print(": ");
-            Serial.print(conditions[conditionCount-1]);
-            #endif
-          }
-        }
-        else value[i++] = c;
-      } 
-      else if (conditionStarted & !keyStarted && (c == ']')) {
-        conditionStarted = false;
-      } 
-      else if (listStarted && !keyStarted && (c == ']')) {
-        listStarted = false;
-      }
     } 
     else {
       #if defined(DEBUG)
-      Serial.println("No more data, waiting for server to disconnect");
+      // if you didn't get a connection to the server:
+      Serial.println("connection failed");
+      have_network = false;
       #endif
-      delay(1000);
     }
   }
-
-  while (client.available()) {
-    char c = client.read();  //Just clean up anything left
-    #if defined(DEBUG)
-    Serial.print(c);
-    #endif
-  }
   
-  client.stop();
-  delay(1000);
+  int conditionCount = 0;
   
-  if (conditionCount < 1) {
-    #if defined(DEBUG)
-    Serial.println("No conditions received");
-    #endif
+  // This is NOT a generic json parser, it is very specific to the openweather response format
+  if (have_network) {
+    int listCount = 0;
+    temp = 0;
+  
+    bool jsonStarted = false;
+    bool listStarted = false;
+    bool conditionStarted = false;
+    bool keyStarted = false;
+    bool haveKey = false;
+    bool valueStarted = false;
+    bool stringStarted = false;
+    bool numStarted = false;
+    int i = 0;
+    char key[20];
+    char value[20];
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+        #if defined(DEBUG)
+        Serial.print(c);
+        #endif
+        if (!jsonStarted && (c == '{')) {
+          jsonStarted = true;
+        } 
+        else if (jsonStarted && !listStarted && (c == '[')) {
+          listStarted = true;
+          listCount++;
+          if (listCount != FORECAST_LINE) listStarted = false;  // Not our line, get out
+        } 
+        else if (listStarted && !conditionStarted && (c == '[')) {
+          conditionStarted = true;
+          conditionCount++;
+          haveKey = false;   // Ignore "weather" key
+          keyStarted = false;
+          if (conditionCount > MAX_CONDITIONS) break;  // Got all our conditions, get out
+        }
+        else if (listStarted && !keyStarted && (c == '"')) {
+          keyStarted = true;
+          i = 0;
+          #if defined(DEBUG)
+          Serial.println("keyStart");
+          #endif
+        } 
+        else if (keyStarted && !haveKey && (c != '"')) {
+          key[i++] = c;
+        } 
+        else if (keyStarted && !haveKey && (c == '"')) {
+          haveKey = true;
+          key[i] = 0x00;
+          #if defined(DEBUG)
+          Serial.println("haveKey");
+          #endif
+        } 
+        else if (haveKey && !valueStarted && ((c == '{') || (c == '['))) {   // Starting a new level, reset
+          haveKey = false;
+          keyStarted = false;
+        }
+        else if (haveKey && !valueStarted && (c != ' ') && (c != ':')) {
+          valueStarted = true;
+          #if defined(DEBUG)
+          Serial.println("valueStart");
+          #endif
+          if (c != '"') {
+            numStarted = true;
+            i = 0;
+            value[i++] = c;
+          } 
+          else {
+            stringStarted = true;
+            i = 0;
+          }
+        } 
+        else if (valueStarted) {
+          if ((stringStarted && (c == '"')) || (numStarted && ((c == ',') || (c == '}')))) {
+            value[i] = 0x00;
+            valueStarted = false;
+            haveKey = false;
+            stringStarted = false;
+            // if (numStarted && (c == '}')) valueStarted = false;
+            numStarted = false;
+            keyStarted = false;
+            #if defined(DEBUG)
+            Serial.println("valueDone");
+            #endif
+            if (bComp(key,"temp")) {
+              temp = atof(value);
+              #if defined(DEBUG)
+              Serial.print("Temperature: ");
+              Serial.print(temp);
+              #endif
+            }
+            else if (bComp(key,"id") && conditionStarted) {
+              conditions[conditionCount-1] = atoi(value);
+              #if defined(DEBUG)
+              Serial.print("Id ");
+              Serial.print(conditionCount);
+              Serial.print(": ");
+              Serial.print(conditions[conditionCount-1]);
+              #endif
+            }
+          }
+          else value[i++] = c;
+        } 
+        else if (conditionStarted & !keyStarted && (c == ']')) {
+          conditionStarted = false;
+        } 
+        else if (listStarted && !keyStarted && (c == ']')) {
+          listStarted = false;
+        }
+      } 
+      else {
+        #if defined(DEBUG)
+        Serial.println("No more data, waiting for server to disconnect");
+        #endif
+        delay(1000);
+      }
+    }
+  
+    while (client.available()) {
+      char c = client.read();  //Just clean up anything left
+      #if defined(DEBUG)
+      Serial.print(c);
+      #endif
+    }
+    
+    client.stop();
+    delay(1000);
+    
+    if (conditionCount < 1) {
+      #if defined(DEBUG)
+      Serial.println("No conditions received");
+      #endif
+    }
   }
  
+  // If no conditions found on network, make some up
+  if (conditionCount < 1) {
+    for (int i=0; i< MAX_CONDITIONS; i++) {
+      conditions[i] = random(199, 804);
+    }
+    temp = random(200, 300);
+  }  
 
+ 
   // Parse the weather info and set the lights
-  
   unsigned int color1 = PURPLE;
   if (temp > TEMP_HOT) {
     color1 = RED;
   }
+  else if (temp > TEMP_WARM) {
+    color1 = LIGHTRED;
+  }  
   else if (temp == 0) {
     color1 = BLACK;
   }
+  else if (temp < TEMP_COOL) {
+    color1 = LIGHTBLUE;
+  }  
   else if (temp < TEMP_COLD) {
     color1 = BLUE;
   }
@@ -352,7 +384,7 @@ void loop() {
       color2 = GREEN; // Rain
     }
     if ((color2 == 0) && (conditions[i] > 599) && (conditions[i] < 700)) {
-      color2 = BLUE; // Snow
+      color2 = WHITE; // Snow
     }
     if ((color2 == 0) && (conditions[i] > 799) && (conditions[i] < 804)) {
       color2 = YELLOW; // Sun
@@ -363,7 +395,7 @@ void loop() {
     if ((color2 == 0) && (conditions[i] > 299) && (conditions[i] < 400)) {
       color2 = LIGHTGREEN; // Drizzle
     }
-    if ((conditions[i] > 199) && (conditions[i] < 300)) {
+    if ((conditions[i] > 199) && (conditions[i] < 300) || ALWAYS_THUNDER) {
       thunder = true; // Thunder
     }
   }
@@ -385,6 +417,10 @@ void loop() {
   
   // Color the cloud!
   boolean display1 = false;
+  if (!have_network || conditionCount < 1) {
+    LED_Display(RED,RED,false);  // Signal fake weather
+    delay(2000);
+  }  
   for (int i=0; i < QUERY_INTERVAL_SEC;) {
     if (display1) {
         LED_Display(color2, color1, true);
@@ -397,9 +433,10 @@ void loop() {
        delay(1000);
     }
     if (thunder) {
-      if (random(1,100) % 3 == 0) {
+      if (random(1,100) % 8 == 0) {
         int claps = random(1,7);
-        unsigned int base_color = (display1) ? color1 : color2;
+        // unsigned int base_color = (display1) ? color1 : color2;
+        unsigned int base_color = BLACK;
         for (int k=0; k < claps; k++) {
           LED_Display(WHITE,WHITE,false);
           delay(random(1,3) * 100);
@@ -409,6 +446,12 @@ void loop() {
       }
     }
   }
+  
+    // If disconnected, try connecting again
+  if (!have_network) {
+    have_network = start_Ethernet();
+  }
+
 }
 
 
