@@ -6,7 +6,7 @@
 
 // LED Driver Pins
 #define LED_RED 9
-#define LED_GREEN 10
+#define LED_GREEN 5
 #define LED_BLUE 6
 
 // Color definitions, using 0x0RGB
@@ -15,7 +15,7 @@
 #define BLUE 0x000F
 #define WHITE 0x0FFF
 #define YELLOW 0x0FF0
-#define GREY 0x0888
+#define GREY 0x0444
 #define BLACK 0x0000
 #define PURPLE 0x0F0F
 #define LIGHTGREEN 0x08F8
@@ -23,7 +23,7 @@
 #define LIGHTRED 0x0F88
 
 // Timing intervals
-#define FADE_INTERVAL_MS 10  //milliseconds 
+#define FADE_INTERVAL_MS 3  //milliseconds 
 #define COLOR_INTERVAL_SEC 5 //seconds
 #define QUERY_INTERVAL_SEC 600 //seconds
 
@@ -416,14 +416,12 @@ void loop() {
   Serial.println(thunder);
   #endif
 
-  // Testing
-  // thunder = true;
-  
+ 
   // Color the cloud!
   boolean display1 = false;
   if (!have_network || conditionCount < 1) {
     LED_Display(RED,RED,false);  // Signal fake weather
-    delay(2000);
+    delay(5000);
   }  
   for (int i=0; i < QUERY_INTERVAL_SEC;) {
     if (display1) {
