@@ -125,7 +125,7 @@ void loop() {
     if ((color2 == 0) && (conditions[i] > 499) && (conditions[i] < 600)) {
       color2 = GREEN; // Rain
     }
-    if ((color2 == 0) && (conditions[i] > 599) && (conditions[i] < 700)) {
+    if ((color2 == 0) && (conditions[i] > 599) && (conditions[i] < 800)) {
       color2 = WHITE; // Snow
     }
     if ((color2 == 0) && (conditions[i] > 799) && (conditions[i] < 804)) {
