@@ -1,8 +1,10 @@
 #define FADE_INTERVAL_MS 3  //milliseconds for each step of the fade sequence (full fade takes 255 * this number to complete)
 
 
-// Set LED intensities. "color" is 4 bits each for RGB. Duplicated to get a full byte
+// Set LED intensities for a 3-color LED or strip. "color" is 4 bits each for RGB. "0" for off, "F" for full on. For example, 
+// Red is 0x0F00 (in hex), Green is 0x00F0, Blue is 0x000F, Yellow is 0x0FF0, etc.
 // fade_color is the color we are fading from; fade = true turns on fading, fade = false skips it
+
 void LED_Display(unsigned int color, unsigned int fade_color, boolean fade) {
   unsigned int red = (color >> 8) & 0xF;
   red |= (red << 4);

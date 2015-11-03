@@ -5,7 +5,7 @@ int network_retry = 1;  // Number of times to try to get a network connection.
 
 // Set up Ethernet connection
 
-boolean start_Ethernet() {
+boolean start_Ethernet() {    // Call this to set up a connection
 #if defined(DEBUG)
   Serial.println("Attempting to configure Ethernet...");
 #endif

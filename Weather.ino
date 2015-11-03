@@ -11,6 +11,10 @@ int conditions[MAX_CONDITIONS];
 int conditionCount;
 float temp;  // Temperature in Celsius
 
+// Call this to get the weather. Puts the temperature in global variable "temp" and weather conditions in the array "conditions[]",
+//  with a count conditionsCount. There may be more than one condition that is valid, for example thunder AND rain, or thunder AND snow.
+// Returns false if it hit a problem.
+
 boolean get_weather() {
   conditionCount = 0;
 #if defined(DEBUG)

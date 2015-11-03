@@ -75,14 +75,16 @@ void loop() {
 
   // Query the weather if network connected
   if (have_network) {
-    
     if ((!get_weather()) || (conditionCount < 1)) {
 #if defined(DEBUG)
       Serial.println("No conditions received");
 #endif
     }
-  }
-
+  } else {
+    conditionCount = 0; // No network, so we didn't try
+  }  
+  
+  boolean fake_weather = false;
   // If no conditions found on network, make some up
   if (conditionCount < 1) {
     for (int i = 0; i < 2; i++) {
@@ -90,6 +92,7 @@ void loop() {
     }
     conditionCount = 2;
     temp = random(0, 30);
+    fake_weather = true;
   }
 
 
@@ -154,7 +157,7 @@ void loop() {
 
   // Color the cloud!
   boolean display1 = false;
-  if (!have_network || conditionCount < 1) {
+  if (fake_weather) {
     LED_Display(RED, RED, false); // Signal fake weather
     delay(5000);
   }
