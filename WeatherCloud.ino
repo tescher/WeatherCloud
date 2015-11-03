@@ -1,3 +1,4 @@
+#include <SPI.h>
 #include <Ethernet.h>
 
 // LED Driver Pins (Ethernet shield uses 10-13 for network stuff, so don't use those)
@@ -115,6 +116,8 @@ void loop() {
     Serial.print(i);
     Serial.print(": ");
     Serial.println(conditions[i]);
+    Serial.print("Temp: ");
+    Serial.println(temp);
 #endif
     if ((color2 == 0) && (conditions[i] > 499) && (conditions[i] < 600)) {
       color2 = GREEN; // Rain
