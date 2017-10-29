@@ -18,6 +18,10 @@
 #define LIGHTGREEN 0x08F8
 #define LIGHTBLUE 0x088F
 #define LIGHTRED 0x0F88
+#define DIMGREEN 0x0080
+#define DIMRED 0x0800
+#define DIMBLUE 0x0008
+#define DIMPURPLE 0x0808
 
 // Timing intervals
 #define QUERY_INTERVAL_SEC 600 //seconds between queries to get the forecast
@@ -30,6 +34,10 @@
 #define TEMP_COLD -12 // 10 F
 #define ALWAYS_THUNDER 0  // Whether or not to always display lightning
 
+// Space weather interpretation
+#define KP_THRESHOLD 5
+#define KP_HIGH 7
+
 // Debugging config
 #define DEBUG 1        // Conditional Compilation
 
@@ -37,6 +45,7 @@
 extern int conditionCount;  // Number of conditions found
 extern int conditions[];    // Weather conditions found
 extern float temp;          // Temperature
+extern int kp;
 
 boolean have_network = false;  // Keep track of whether we have a network
 
@@ -72,114 +81,122 @@ void setup() {
 
 void loop() {
 
+  unsigned int color1, color2;
 
-  // Query the weather if network connected
+  // Check the space weather, if above threashold display that instead of regular weather
+
   if (have_network) {
-    if ((!get_weather()) || (conditionCount < 1)) {
-#if defined(DEBUG)
-      Serial.println("No conditions received");
-#endif
-    }
-  } else {
-    conditionCount = 0; // No network, so we didn't try
-  }  
-  
-  boolean fake_weather = false;
-  // If no conditions found on network, make some up
-  if (conditionCount < 1) {
-    for (int i = 0; i < 2; i++) {
-      conditions[i] = random(199, 804);  // Just pick some weather conditions. Get two so one might be thunder
-    }
-    conditionCount = 2;
-    temp = random(0, 30);
-    fake_weather = true;
-  }
-
-
-  // Parse the weather info and set the lights
-  unsigned int color1 = PURPLE;  // To start assume we are between COOL and WARM
-  if (temp > TEMP_HOT) {
-    color1 = RED;
-  }
-  else if (temp > TEMP_WARM) {
-    color1 = LIGHTRED;
-  }
-  else if (temp < TEMP_COOL) {
-    color1 = LIGHTBLUE;
-  }
-  else if (temp < TEMP_COLD) {
-    color1 = BLUE;
-  }
-
-  unsigned int color2 = BLACK;
-  boolean thunder = false;
-  for (int i = 0; i < conditionCount; i++) {
-#if defined(DEBUG)
-    Serial.print("Condition ");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.println(conditions[i]);
-    Serial.print("Temp: ");
-    Serial.println(temp);
-#endif
-    if ((color2 == 0) && (conditions[i] > 499) && (conditions[i] < 600)) {
-      color2 = GREEN; // Rain
-    }
-    if ((color2 == 0) && (conditions[i] > 599) && (conditions[i] < 800)) {
-      color2 = WHITE; // Snow
-    }
-    if ((color2 == 0) && (conditions[i] > 799) && (conditions[i] < 804)) {
-      color2 = YELLOW; // Sun or partly cloudy
-    }
-    if ((color2 == 0) && (conditions[i] == 804)) {
-      color2 = GREY; // Clouds
-    }
-    if ((color2 == 0) && (conditions[i] > 299) && (conditions[i] < 400)) {
-      color2 = LIGHTGREEN; // Drizzle
-    }
-    if ((conditions[i] > 199) && (conditions[i] < 300) || ALWAYS_THUNDER) {
-      thunder = true; // Thunder
-    }
-  }
-
-
-
-#if defined(DEBUG)
-  Serial.println("");
-  Serial.print("Color1: ");
-  Serial.println(color1);
-  Serial.print("Color2: ");
-  Serial.println(color2);
-  Serial.print("Thunder: ");
-  Serial.println(thunder);
-#endif
-
-
-  // Color the cloud!
-  boolean display1 = false;
-  if (fake_weather) {
-    LED_Display(RED, RED, false); // Signal fake weather
-    delay(5000);
-  }
-  for (int i = 0; i < QUERY_INTERVAL_SEC;) { // Fade back and forth between color1 (temperature) and color2 (sky/precip)
-    if (display1) {
-      LED_Display(color2, color1, true); 
-      display1 = false;
+    if (get_space_weather() && (kp >= KP_THRESHOLD)) {
+      if (kp >= KP_HIGH) {
+        color1 = PURPLE;
+        color2 = GREEN;
+      } else {
+        color1 = DIMPURPLE;
+        color2 = DIMGREEN;
+      }
+      for (int i = 0; i < (QUERY_INTERVAL_SEC / 2);) { // Fade back and forth 
+        LED_Display(color1, color2, true);   // Fade to black for 2 sec. between patterns
+        delay(random(200,1000));
+        LED_Display(color2,color1, true);
+        delay(random(200,1000));
+      }
     } else {
-      LED_Display(color1, color2, true);
-      display1 = true;
-    }
-    for (int j = 0; j < COLOR_INTERVAL_SEC; j++, i++) {
-      delay(1000);
-    }
-    if (thunder) {  // Flash some lightning
-      if (random(1, 100) % 8 == 0) {
-        int claps = random(1, 7);
-        for (int k = 0; k < claps; k++) {
-          LED_Display(WHITE, WHITE, false);
-          delay(random(1, 3) * 100);
-          LED_Display(BLACK, BLACK, false);
-          delay(random(1, 5) * 300);
+#if defined(DEBUG)
+      Serial.println("No space weather received or Kp too low");
+#endif
+ 
+      // Query the weather if network connected
+      if ((!get_weather()) || (conditionCount < 1)) {
+#if defined(DEBUG)
+        Serial.println("No weather conditions received");
+#endif
+      } else {
+
+        // Parse the weather info and set the lights
+        color1 = PURPLE;  // To start assume we are between COOL and WARM
+        if (temp > TEMP_HOT) {
+          color1 = RED;
+        }
+        else if (temp > TEMP_WARM) {
+          color1 = LIGHTRED;
+        }
+        else if (temp < TEMP_COOL) {
+          color1 = LIGHTBLUE;
+        }
+        else if (temp < TEMP_COLD) {
+          color1 = BLUE;
+        }
+
+        color2 = BLACK;
+        boolean thunder = false;
+        for (int i = 0; i < conditionCount; i++) {
+      #if defined(DEBUG)
+          Serial.print("Condition ");
+          Serial.print(i);
+          Serial.print(": ");
+          Serial.println(conditions[i]);
+          Serial.print("Temp: ");
+          Serial.println(temp);
+      #endif
+          if ((color2 == 0) && (conditions[i] > 499) && (conditions[i] < 600)) {
+            color2 = GREEN; // Rain
+          }
+          if ((color2 == 0) && (conditions[i] > 599) && (conditions[i] < 800)) {
+            color2 = WHITE; // Snow
+          }
+          if ((color2 == 0) && (conditions[i] > 799) && (conditions[i] < 804)) {
+            color2 = YELLOW; // Sun or partly cloudy
+          }
+          if ((color2 == 0) && (conditions[i] == 804)) {
+            color2 = GREY; // Clouds
+          }
+          if ((color2 == 0) && (conditions[i] > 299) && (conditions[i] < 400)) {
+            color2 = LIGHTGREEN; // Drizzle
+          }
+          if ((conditions[i] > 199) && (conditions[i] < 300) || ALWAYS_THUNDER) {
+            thunder = true; // Thunder
+          }
+        }
+      
+      
+      
+      #if defined(DEBUG)
+        Serial.println("");
+        Serial.print("Color1: ");
+        Serial.println(color1);
+        Serial.print("Color2: ");
+        Serial.println(color2);
+        Serial.print("Thunder: ");
+        Serial.println(thunder);
+      #endif
+      
+      
+        // Color the cloud!
+        boolean display1 = false;
+        for (int i = 0; i < (QUERY_INTERVAL_SEC / 2);) { // Fade back and forth between color1 (temperature) and color2 (sky/precip)
+          if (display1) {
+            LED_Display(color2, BLACK, true);   // Fade to black for 2 sec. between patterns
+            delay(1000);
+            LED_Display(BLACK, color1, true);   
+            display1 = false;
+          } else {
+            LED_Display(color1, color2, true);
+            display1 = true;
+          }
+          for (int j = 0; j < COLOR_INTERVAL_SEC; j++, i++) {
+            delay(1000);
+          }
+          if (thunder) {  // Flash some lightning
+            if (random(1, 100) % 8 == 0) {
+              int claps = random(1, 7);
+              for (int k = 0; k < claps; k++) {
+                LED_Display(WHITE, WHITE, false);
+                delay(random(1, 3) * 100);
+                LED_Display(BLACK, BLACK, false);
+                delay(random(1, 5) * 300);
+              }
+            }
+          }
         }
       }
     }
