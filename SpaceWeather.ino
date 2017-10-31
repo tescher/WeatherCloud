@@ -11,14 +11,14 @@ boolean get_space_weather() {
 
   if (client.connect(swserver, 80)) {
     client.print("GET ");
-    client.print("products/noaa-estimated-planetary-k-index-1-minute.json");
+    client.print("/products/noaa-estimated-planetary-k-index-1-minute.json");
     client.println(" HTTP/1.0");
     client.print("Host: ");
     client.println(swserver);
     client.println();
 #if defined(DEBUG)
     Serial.print("GET ");
-    Serial.print("products/noaa-estimated-planetary-k-index-1-minute.json");
+    Serial.print("/products/noaa-estimated-planetary-k-index-1-minute.json");
     Serial.println(" HTTP/1.0");
     Serial.print("Host: ");
     Serial.println(swserver);

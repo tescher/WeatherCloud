@@ -82,6 +82,7 @@ void setup() {
 void loop() {
 
   unsigned int color1, color2;
+  bool fast_change = false;
 
   // Check the space weather, if above threashold display that instead of regular weather
 
@@ -90,15 +91,20 @@ void loop() {
       if (kp >= KP_HIGH) {
         color1 = PURPLE;
         color2 = GREEN;
+        fast_change = true;
       } else {
         color1 = DIMPURPLE;
         color2 = DIMGREEN;
       }
       for (int i = 0; i < (QUERY_INTERVAL_SEC / 2);) { // Fade back and forth 
-        LED_Display(color1, color2, true);   // Fade to black for 2 sec. between patterns
-        delay(random(200,1000));
+        LED_Display(color1, color2, true); 
+        if (!fast_change) {
+          delay(500);  
+        }
         LED_Display(color2,color1, true);
-        delay(random(200,1000));
+        if (!fast_change) {
+          delay(500);  
+        }
       }
     } else {
 #if defined(DEBUG)
@@ -175,12 +181,12 @@ void loop() {
         boolean display1 = false;
         for (int i = 0; i < (QUERY_INTERVAL_SEC / 2);) { // Fade back and forth between color1 (temperature) and color2 (sky/precip)
           if (display1) {
-            LED_Display(color2, BLACK, true);   // Fade to black for 2 sec. between patterns
+            LED_Display(BLACK, color2, true);   // Fade to black for 2 sec. between patterns
             delay(1000);
-            LED_Display(BLACK, color1, true);   
+            LED_Display(color1, BLACK, true);   
             display1 = false;
           } else {
-            LED_Display(color1, color2, true);
+            LED_Display(color2, color1, true);
             display1 = true;
           }
           for (int j = 0; j < COLOR_INTERVAL_SEC; j++, i++) {
