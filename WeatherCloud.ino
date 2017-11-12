@@ -96,7 +96,7 @@ void loop() {
         color1 = DIMPURPLE;
         color2 = DIMGREEN;
       }
-      for (int i = 0; i < (QUERY_INTERVAL_SEC / 2);) { // Fade back and forth 
+      for (int i = 0; i < (QUERY_INTERVAL_SEC / 2); i++) { // Fade back and forth 
         LED_Display(color1, color2, true); 
         if (!fast_change) {
           delay(500);  
