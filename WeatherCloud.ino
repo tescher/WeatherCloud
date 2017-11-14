@@ -179,7 +179,7 @@ void loop() {
       
         // Color the cloud!
         boolean display1 = false;
-        for (int i = 0; i < (QUERY_INTERVAL_SEC / 2);) { // Fade back and forth between color1 (temperature) and color2 (sky/precip)
+        for (int i = 0; i < (QUERY_INTERVAL_SEC / 2); i++) { // Fade back and forth between color1 (temperature) and color2 (sky/precip)
           if (display1) {
             LED_Display(BLACK, color2, true);   // Fade to black for 2 sec. between patterns
             delay(1000);
